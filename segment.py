@@ -179,15 +179,3 @@ def combined_seg(segment, classify, extract_images_from_contours, image):
     segmentations["names"] = classifications["names"]
     return segmentations
 
-
-
-
-
-
-
-
-
-
-
-
-
