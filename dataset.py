@@ -181,6 +181,9 @@ def load_image_segmentation(image_filename, label_filename):
     the label_filename should be a txt file in yolov8 format
     """
     image = cv2.imread(image_filename)
+    if not os.path.exists(label_filename):
+        return (image, [])
+
     with open(label_filename, 'r') as f:
         string = f.read()
     image_height, image_width = image.shape[:2]
@@ -208,7 +211,9 @@ def scale_image_segmentation(imagesegmentation, dst_width, dst_height):
         contour =  transform_contour(contour, matrix)
         result_labelled_contours.append((label, contour))
 
-    image = transform_image(image, matrix)
+    #image = transform_image(image, matrix)
+    image = cv2.resize(image, (dst_width, dst_height), interpolation= cv2.INTER_AREA)
+
     result_image = image[0:dst_height, 0:dst_width]
     return (result_image, result_labelled_contours)
 
@@ -229,12 +234,14 @@ def get_random_color():
 
 def object_mask_to_foreground_mask(object_mask):
     """
-    modifies the mask of an object for image blending
+    possibly modifies the mask of an object for image blending
     """
     mask = object_mask.copy()
-    kernel = np.ones((8,8),np.uint8)
-    mask = cv2.dilate(mask, kernel, iterations = 2)
-    mask = cv2.GaussianBlur(mask, (51, 51), 0)
+    #kernel = np.ones((8,8),np.uint8)
+    #mask = cv2.dilate(mask, kernel, iterations = 2)
+    #mask = cv2.GaussianBlur(mask, (51, 51), 0)
+    #maskmo = cv2.distanceTransform(mask, cv2.DIST_L2, maskSize=3, dstType=cv2.CV_8U)
+    #maskmo = cv2.normalize(maskmo, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
     return mask
 
 
@@ -307,6 +314,10 @@ def labels_masks_images_to_image_segmentations(labelsmasksimages, background, ob
 
 
 def radii_centers_to_transformation_matrices(src_radii, src_centers, image_width, image_height):
+    """
+    returns transformation matrices for all the objects
+    that should be placed randomly in the image.
+    """
     matrices = []
     dst_radii, dst_centers = pack_circles_with_resizing(
         src_radii,
@@ -324,6 +335,10 @@ def radii_centers_to_transformation_matrices(src_radii, src_centers, image_width
 
 
 def image_segmentations_to_radii_centers(imagesegmentations):
+    """
+    returns the radii and centers of the minimum enclosing circles
+    of the image segmentation contours
+    """
     centers = []
     radii = []
     for image, labelledcontours in imagesegmentations:
@@ -335,6 +350,9 @@ def image_segmentations_to_radii_centers(imagesegmentations):
 
 
 def visualize_image_segmentation(image_segmentation, opacity=0.8):
+    """
+    helper function to that returns an annotated image
+    """
     img, labelled_contours = image_segmentation
     image = img.copy()
     overlay = image.copy()
@@ -382,6 +400,10 @@ def save_checkpoint(checkpoint_path, checkpoint):
         print(e)
 
 def stitch_image_segmentations_together(unscaled_imagesegmentations, background):
+    """
+    use a custom background and do image transplanting
+    with the provided image segmentations
+    """
     image_height, image_width = background.shape[:2]
     image_segmentations = []
     for imgseg in unscaled_imagesegmentations:
@@ -396,6 +418,11 @@ def stitch_image_segmentations_together(unscaled_imagesegmentations, background)
     return newimagesegmentation
 
 def image_paths_to_image_segmentations(image_paths, only_biggest_contour=True):
+    """
+    Load the image segmentations.
+    This function assumes that for every image in an images directory
+    there is also a txt file with the same basename in a labels directory.
+    """
     image_segmentations = []
     for image_path in image_paths:
         annotation_path = image_path_to_label_path(image_path)
@@ -413,22 +440,61 @@ def image_paths_to_image_segmentations(image_paths, only_biggest_contour=True):
         image_segmentations.append(image_segmentation)
     return image_segmentations
 
+# Somehow I found the value of `gamma=1.2` to be the best in my case
+def adjust_gamma(image, gamma=1.2):
+    # build a lookup table mapping the pixel values [0, 255] to
+    # their adjusted gamma values
+    invGamma = 1.0 / gamma
+    table = np.array([((i / 255.0) ** invGamma) * 255
+        for i in np.arange(0, 256)]).astype("uint8")
+
+    # apply gamma correction using the lookup table
+    return cv2.LUT(image, table)
 
 def get_simple_background_provider(directory):
+    """
+    return a function that randomly chooses an image
+    from a specified directory and modifies it
+    """
     image_paths = glob.glob(f"{os.path.abspath(directory)}/**/*.jpg", recursive=True)
     def get_random_background():
         i = random.randrange(len(image_paths))
         image_path = image_paths[i]
         image = cv2.imread(image_path)
-        contrast = random.uniform(0, 3) #5. # Contrast control ( 0 to 127)
-        brightness = random.uniform(0, 3) #2. # Brightness control (0-100)
-        image = cv2.addWeighted(image, contrast, image, 0, brightness)
+        image = adjust_gamma(image, gamma=1.0 + random.uniform(0.2, 0.9))
+        h, w = image.shape[:2]
+        rot_mat = get_rotation_matrix((w/2, h/2), random.randrange(0, 90))
+        image = cv2.warpPerspective(image, rot_mat, (w, h))
         return image
     return get_random_background
 
 
+
+import color_transfer
+def contrast_brightness_transfer(source, target):
+    """
+    return an image, whose value channel
+    was matched to that of the source image
+    """
+    source = cv2.cvtColor(source, cv2.COLOR_BGR2HSV).astype(np.float32)
+    target = cv2.cvtColor(target, cv2.COLOR_BGR2HSV).astype(np.float32)
+    h_mean_src, h_std_src, s_mean_src, s_std_src, v_mean_src, v_std_src =  color_transfer.image_stats(source)
+    h_mean_dst, h_std_dst, s_mean_dst, s_std_dst, v_mean_dst, v_std_dst =  color_transfer.image_stats(target)
+    h, s, v = cv2.split(target)
+    v -= v_mean_dst
+    v = ( v_std_dst / v_std_src) * v
+    v += v_mean_src
+    v = np.clip(v, 0, 255)
+    transfer = cv2.merge([h, s, v])
+    transfer = cv2.cvtColor(transfer.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    return transfer
+
+
 def seg_augment(src_dir, dst_dir, get_background, max_object_count, image_prefix="", seed=3):
-    """generates a new dataset with just augmented image segmentations"""
+    """
+    generates a new dataset with just
+    implanted image segmentations
+    """
     src_dir = os.path.abspath(src_dir)
     dst_dir = os.path.abspath(dst_dir)
 
@@ -455,7 +521,18 @@ def seg_augment(src_dir, dst_dir, get_background, max_object_count, image_prefix
         selected_image_paths = image_paths[start:end]
         background = get_background()
         image_segmentations = image_paths_to_image_segmentations(selected_image_paths)
+        for i in range(len(image_segmentations)):
+            image, labelled_contours = image_segmentations[i]
+            image = contrast_brightness_transfer(background, image)
+            image_segmentations[i] = (image, labelled_contours)
+
         newimagesegmentation = stitch_image_segmentations_together(image_segmentations, background)
+
+        if bool(random.getrandbits(1)):
+            image, labelled_contours = newimagesegmentation
+            smooth_kernel_size = random.choice([(3, 3), (5,5)])
+            image = cv2.GaussianBlur(image, smooth_kernel_size, 0)
+            newimagesegmentation = (image, labelled_contours)
 
         output_image_path = f"{dst_dir}/images/{image_prefix}image_{start}_{end}.jpg"
         output_label_path = image_path_to_label_path(output_image_path)
@@ -466,7 +543,10 @@ def seg_augment(src_dir, dst_dir, get_background, max_object_count, image_prefix
 
 
 def seg_remap(src_dir, dst_dir, remap, remove_backgrounds=False):
-    """outputs the same segmentation dataset with remapped labels. all labels not specified are dropped."""
+    """
+    outputs the same segmentation dataset with remapped labels.
+    all labels that are not specified are dropped.
+    """
     # this calculation is done
     # because we want to continue
     # where we left of
@@ -501,6 +581,21 @@ def seg_remap(src_dir, dst_dir, remap, remove_backgrounds=False):
         output_image_path = image_path.replace(src_dir, dst_dir)
         output_label_path = image_path_to_label_path(output_image_path)
         save_image_segmentation(new_image_segmentation, output_image_path, output_label_path)
+
+def get_yaml_content(yaml_file):
+    """
+    just returns the content of a yaml
+    file or None if it did not work
+    """
+    info = None
+    with open(yaml_file, "r") as f:
+        try:
+            info = yaml.safe_load(f)
+        except yaml.YAMLError as exc:
+            print(exc)
+            return None
+    return info
+
 
 def get_yaml_name_remap(yaml_file, dstName2Category):
     with open(yaml_file, "r") as f:
@@ -570,7 +665,8 @@ def save_standard_yaml(dst_yaml_path, category_label_map):
         yaml.dump(info, f, default_flow_style=False)
 
 
-def combine_segs(datasetname2names, output_path, name2intcategory, weights, get_background=None, max_object_count=3, seed=3):
+def combine_segs(datasetname2names, output_path, name2intcategory, weights,
+                 get_background=None, max_object_count=3, seed=3):
     output_path = os.path.abspath(output_path)
     save_standard_yaml(f"{output_path}/data.yaml", name2intcategory)
 
@@ -1072,81 +1168,81 @@ def split_cls(input_dir, output_dir, train_frac, val_frac):
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
             shutil.copyfile(image_path, output_path)
 
-from datetime import datetime
 
-def yolo2coco(src_dir):
-    src_dir = os.path.abspath(src_dir)
-    coco_filename = f"{src_dir}/annotations.json"
-    yaml_file = f"{src_dir}/data.yaml"
-    with open(yaml_file, "r") as f:
-        try:
-            info = yaml.safe_load(f)
-        except yaml.YAMLError as exc:
-            print(exc)
-            return None
+def get_invalid_label_filenames(dataset_dir):
+  dataset_dir = os.path.abspath(dataset_dir)
+  label_filenames = glob.iglob(f"{dataset_dir}/**/*.txt", recursive=True)
+  invalid_label_filenames = []
+  for label_filename in label_filenames:
+    with open(label_filename, 'r') as f:
+      lines = f.read().splitlines()
+      for line in lines:
+          items = line.split(' ')
+          if len(items) > 0 and len(items) < 7:
+            invalid_label_filenames.append(label_filename)
+            print(label_filename)
+            break
+  return invalid_label_filenames
 
-    categories = [
-        {
-            "supercategory": "object",
-            "id": category_id,
-            "name": categoryname
-        }
-        for category_id, categoryname in enumerate(info["names"])
-    ]
-    date = datetime.today()
-    info = {
-        "description": "segmentation dataset converted from yolo format",
-        "url": "http://cocodataset.org",
-        "version": "1.0",
-        "year": date.strftime("%Y"),
-        "contributor": "",
-        "date_created": date.strftime("%Y/%m/%d")
-    }
-    licenses = [
-        {
-            "url": "https://creativecommons.org/licenses/by-nc/4.0/deed.en",
-            "id": 1,
-            "name": "Attribution-NonCommercial License"
-        }
-    ]
-    images = []
-    annotations = []
-    image_paths = get_all_images_in_numerical_order(src_dir)
-    num_annotation = 0
-    for image_id, image_path in enumerate(image_paths):
-        label_path = image_path_to_label_path(image_path)
-        image, labelledcontours = load_image_segmentation(image_path, label_path)
-        image_height, image_width = image.shape[:2]
-        coco_image = {
-            "id": image_id,
-            "width": image_width,
-            "height": image_height,
-            "file_name": image_path,
-            "license": 1,
-            "coco_url": image_path,
-            "date_captured": "0"
-        }
-        images.append(coco_image)
-        for label, contour in labelledcontours:
-            x, y, w, h = cv2.boundingRect(contour)
-            coco_annotation = {
-                "id": num_annotation,
-                "image_id": image_id,
-                "category_id": label,
-                "iscrowd": 0,
-                "bbox": [x, y, w, h],
-                "segmentation": [list(map(float, contour.flatten()))],
-                "area": cv2.contourArea(contour)
-            }
-            num_annotation += 1
-            annotations.append(coco_annotation)
-    coco_json = {
-        "info": info,
-        "licenses": licenses,
-        "categories": categories,
-        "images": images,
-        "annotations": annotations,
-        "categories": categories
-    }
-    with open(coco_filename, "w") as f:
-        json.dump(coco_json, f)
+def remove_invalid_label_filenames_and_images(invalid_label_filenames):
+  corresponding_image_filenames = []
+  for label_filename in invalid_label_filenames:
+    image_path = "/images/".join(label_filename.rsplit("/labels/", 1))
+    image_path = ".jpg".join(image_path.rsplit(".txt"))
+    corresponding_image_filenames.append(image_path)
+  for image_filename in corresponding_image_filenames:
+    if os.path.exists(image_filename):
+      print(f"removing {image_filename}")
+      os.remove(image_filename)
+  for label_filename in invalid_label_filenames:
+    if os.path.exists(label_filename):
+      print(f"removing {label_filename}")
+      os.remove(label_filename)
+
+
+
+
+
+
+
+
+
+if __name__ == '__main__':
+
+    seg_augment(
+        "../images/litterseg.v1i.yolov8",
+        "./myaugment",
+        get_simple_background_provider("./conveyorbelt-3/train/"),
+        4,
+        image_prefix="litter_augment"
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

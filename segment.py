@@ -67,6 +67,55 @@ def extract_images_for_classification(image, contours):
     return images
 
 
+import supervision as sv
+
+import time
+
+def color_seg2(image, color_hsv_min_max=[[0, 70, 0], [179, 255, 255]]):
+    start = time.time()
+    mask = color_threshold_mask(image, color_hsv_min_max)
+    contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    speed = time.time() - start
+
+
+    if len(contours) == 0:
+        detections = sv.Detections.empty()
+        detections.speed = speed
+
+    object_boxes_xyxy = []
+    object_masks = []
+    confidences = []
+    class_ids = []
+
+    for i in range(len(contours)):
+        object_mask = np.zeros(image.shape[:2], dtype=np.uint8)
+        cv2.drawContours(object_mask, contours, i, 255, -1)
+        #object_mask = object_mask.astype(bool)
+        x1, y1, w, h = cv2.boundingRect(contours[i])
+        x2 = x1 + w
+        y2 = y1 + h
+        object_boxes_xyxy.append([x1, y1, x2, y2])
+        object_masks.append(object_mask)
+        confidences.append(1)
+        class_ids.append(0)
+
+    xyxys = np.array(object_boxes_xyxy)
+    #print(xyxys)
+
+    detections = sv.Detections(
+        xyxy=xyxys,
+        mask=np.array(object_masks),
+        confidence=np.array(confidences),
+        class_id=np.array(class_ids)
+    )
+
+    detections.speed = speed
+    return detections
+
+
+def yolov8_seg2(model, image):
+    return supervision.Detections.from_ultralytics(model(image)[0])
+
 
 def color_seg(image, color_hsv_min_max = [[0, 70, 0], [179, 255, 255]], only_biggest_contour=False):
     total_start = time.time()
@@ -107,6 +156,10 @@ def color_seg(image, color_hsv_min_max = [[0, 70, 0], [179, 255, 255]], only_big
         "masks": object_masks,
         "time_total": total_elapsed
     }
+
+
+
+
 
 
 
