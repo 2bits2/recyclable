@@ -10,20 +10,23 @@ from ultralytics import YOLO
 def main():
 
     # initialize robot
-    settings = get_settings(is_simulation=True)
+    settings = get_settings(is_simulation=False)
     robot = NiryoRobot(settings["ip"])
     robot.calibrate_auto()
     robot.update_tool()
     robot.release_with_tool()
 
-    conveyor_id = ConveyorID.ID_1
+
+    conveyor_id = robot.set_conveyor()
+    #ConveyorID.ID_1
 
     # define which segmentation
     yolomodel = YOLO("../code/resources/garbageclassifcationsegaugyolov8n224.pt")
     infer = partial(segment.yolov8_seg, yolomodel)
 
     #robot_learn_poses(robot, yolomodel.names, settings)
-    #robot_learn_poses(robot, ["paper", "glass", "plastic", "metal", "medical", "e-waste", "cardboard", "trash", "bio", "background", "observation"], settings)
+
+    robot_learn_poses(robot, ["paper", "glass", "plastic", "bio", "metal", "cardboard"], settings)#"metal", "medical", "e-waste", "cardboard", "trash", "bio", "background", "observation"], settings)
     #robot_learn_poses(robot, ["observation"], settings)
 
     speed = 0
@@ -31,9 +34,9 @@ def main():
 
     # sorting loop
     while True:
-        #robot.run_conveyor(conveyor_id, speed=50)
-        #robot.wait(1)
-        #robot.stop_conveyor(conveyor_id)
+        robot.run_conveyor(conveyor_id, speed=50)
+        robot.wait(1)
+        robot.stop_conveyor(conveyor_id)
 
         # move to observation pose
         observation_pose = settings["poses"]["observation"]
@@ -64,7 +67,7 @@ def main():
 
         viz = dataset.visualize_image_segmentation((image, list(zip(names, contours))))
         cv2.imshow("viz", viz)
-        key = cv2.waitKey(0)
+        key = cv2.waitKey(1)
 
         # if no objects are present
         # the conveyor belt can move
@@ -75,10 +78,16 @@ def main():
             #robot.control_conveyor(conveyor_id, False, 0, ConveyorDirection.Forward)
             continue
 
+
         # get the object
         # that we want to grab
         target_pose_name = names[0]
         contour = contours[0]
+
+        print(f"choosing {target_pose_name}")
+
+        if target_pose_name == 'paper':
+            continue
 
         # ensure that the object has
         # a target position
@@ -103,7 +112,7 @@ def main():
         workspace_name = settings["workspace_name"]
         obj_pose = robot.get_target_pose_from_rel(
                 workspace_name,
-                height_offset=0.0,
+                height_offset=-0.009,
                 x_rel=cx_rel,
                 y_rel=cy_rel,
                 yaw_rel=angle)
