@@ -1,6 +1,4 @@
 import dataset
-#from torch import BoolTensor, IntTensor, Tensor
-#from torchmetrics.detection.mean_ap import MeanAveragePrecision
 import json
 import yaml
 import os
@@ -8,16 +6,11 @@ import glob
 import cv2
 import numpy as np
 from functools import partial
-#import matplotlib as plt
 from ultralytics import YOLO
-#import torch
 
 import ultralytics
 import supervision as sv
 import time
-#import pandas as pd
-#import seaborn as sns
-#import matplotlib.pyplot as plt
 
 # a little hack to serialize tensors and numpy
 # arrays , that would otherwise
@@ -509,7 +502,6 @@ def test_accuracy_yolo(model, test_dir, plot_random=False, n_samples = 8):
         c = 4
         r = math.ceil(n_samples/c)
         plt.figure(figsize=(20,5*r+1))
-        #plt.suptitle(f'Visualizing random values with their labels.\nThe accuracy on the data is passed {str("%.2f" % (test_accuracy*100))}%')
         for i in range(n_samples):
             random_label = random.choice(list(result_dict.keys()))
             random_path = f'{test_dir}/{random_label}'
@@ -618,12 +610,8 @@ def torch_evaluate_dataset(dataset:sv.DetectionDataset, prediction_callback, met
             "masks":  BoolTensor([] if annotation.mask is None else annotation.mask),
             "labels": IntTensor(annotation.class_id)
         }
-
-        # print(detections.mask)
-
         if detections.xyxy is not None and detections.mask is None:
             print(detections.xyxy)
-
         predictions = {
             "boxes": Tensor(detections.xyxy),
             "masks": BoolTensor([] if detections.mask is None else detections.mask),
@@ -637,158 +625,28 @@ def torch_evaluate_dataset(dataset:sv.DetectionDataset, prediction_callback, met
 
 
 if __name__ == '__main__':
-
-
-    # dataset = sv.DetectionDataset.from_yolo(
-    #     "../datasets/trashseg10zerowastecropped/train/images",
-    #     "../datasets/trashseg10zerowastecropped/train/labels",
-    #     "../datasets/trashseg10zerowastecropped/data.yaml")
-
-
-
-
-
-
-    #plt.savefig('barplot_latex.pgf', format='pgf')#, #bbox_inches='tight')
-
-    #print(results)
-
-    # font = {'family' : 'normal',
-    #         'weight' : 'bold',
-    #         'size'   : 22}
-
-    # matplotlib.rc('font', **font)
-
-    image_path = "../datasets/trashseg11trashboxcropped/train/images/plastic_9_jpg.rf.154a55e075332c8f762b8e326ee1a02f.jpg"
-    image = cv2.imread(image_path)
-    #hsv_min_max = utils.find_optimal_hsv_threshold_interactively(image)
     hsv_min_max = ([0, 0, 100], [179, 255, 255])
-    print(hsv_min_max)
-
-    #model_trashboxsegnormal = YOLO("../models/trashboxsegment/trashboxsegnoaug/weights/best.pt")
-    # model_trashboxsegtransformed = YOLO("../models/trashboxsegment/trashboxsegaugsplitted/weights/best.pt")
-
     model_garbageclassseg = YOLO("../models/garbageclassificationsegment_augmented224yolov8n/weights/best.pt")
-    # model_zerowaste = YOLO("../models/zerowasteaug160yolov8n-seg/weights/best.pt")
-
     model_classifier_trashbox = YOLO("../models/trashboxclassify/trashboxclassifyyolov8n100/weights/best.pt")
-    # model_classifier_trashnet = YOLO("../models/trashnet_classify/trashnet-splitted-classifier/weights/best.pt")
-
-    # conf_matrix, names = test_accuracy_yolo(model_classifier_trashbox, "../datasets/trashboxidealcutouts",
-    #                     plot_random=True, n_samples = 8)
-
-    # confmatrix_plot("confmatrixnormalized.pdf", conf_matrix, names)
-
-    #confmatrix_plot("confmatrixnormalized.pdf", conf_matrix_normalized, names)
-
-    # dataset_cropped_zerowaste = sv.DetectionDataset.from_yolo(
-    #     "../datasets/trashseg10zerowastecropped/train/images",
-    #     "../datasets/trashseg10zerowastecropped/train/labels",
-    #     "../datasets/trashseg10zerowastecropped/data.yaml")
-
-    # dataset_cropped_garbageclassseg = sv.DetectionDataset.from_yolo(
-    #     "../datasets/trashseg12garbageclasssegcropped/train/images",
-    #     "../datasets/trashseg12garbageclasssegcropped/train/labels",
-    #     "../datasets/trashseg12garbageclasssegcropped/data.yaml")
-
     dataset_cropped_trashboxseg = sv.DetectionDataset.from_yolo(
         "../datasets/trashseg11trashboxcropped/train/images",
         "../datasets/trashseg11trashboxcropped/train/labels",
         "../datasets/trashseg11trashboxcropped/data.yaml")
-
-
-
-
-    # it = PerfectDetections(dataset_cropped_trashboxseg)
-    # detect_trashbox2stageperfect = partial(
-    #     combined_seg,
-    #     partial(display_det, it ),
-    #     partial(yolov8_classify, model_classifier_trashbox)
-    # )
-    # evaldataset("./results/segment_trashbox2stageperfect", dataset_cropped_trashboxseg, detect_trashbox2stageperfect)
-
-
-
-    # dataset_cropped_object = sv.DetectionDataset.from_yolo(
-    #     "../datasets/trashseg13objectcropped/train/images",
-    #     "../datasets/trashseg13objectcropped/train/labels",
-    #     "../datasets/trashseg13objectcropped/data.yaml")
-
-    # detect_zerowaste = partial(yolov8_detect,
-    #                            model_zerowaste,
-    #                            class_mapping=get_class_mapping(
-    #                                model_zerowaste.names,
-    #                                dataset_cropped_zerowaste.classes))
-
-    # detect_garbageclassseg = partial(yolov8_detect,
-    #                            model_garbageclassseg,
-    #                            class_mapping=get_class_mapping(
-    #                                model_garbageclassseg.names,
-    #                                dataset_cropped_garbageclassseg.classes))
-
-    # detect_trashboxsegnormal = partial(yolov8_detect,
-    #                                    model_trashboxsegnormal,
-    #                                    class_mapping=get_class_mapping(
-    #                                        model_trashboxsegnormal.names,
-    #                                        dataset_cropped_trashboxseg.classes))
-
-
-    # detect_trashboxsegtransformed = partial(yolov8_detect,
-    #                                    model_trashboxsegtransformed,
-    #                                    class_mapping=get_class_mapping(
-    #                                        model_trashboxsegtransformed.names,
-    #                                        dataset_cropped_trashboxseg.classes))
-
-
-    # detect_object_zerowaste = partial(yolov8_detect,
-    #                            model_zerowaste,
-    #                            class_mapping=get_single_class_mapping(model_zerowaste.names))
-
-
     detect_object_garbageclassseg = partial(yolov8_detect,
                                             model_garbageclassseg,
                                             class_mapping=get_single_class_mapping(model_garbageclassseg.names))
-
-    # detect_object_trashboxsegnormal = partial(yolov8_detect,
-    #                                           model_trashboxsegnormal,
-    #                                           class_mapping=get_single_class_mapping(model_trashboxsegnormal.names))
-
-    # detect_object_trashboxsegtransformed = partial(yolov8_detect,
-    #                                           model_trashboxsegtransformed,
-    #                                           class_mapping=get_single_class_mapping(
-    #                                               model_trashboxsegtransformed.names))
-
     detect_object_hsv_colorthresh = partial(color_thresh_detect, color_hsv_min_max=hsv_min_max)
-
-
     detect_trashbox2stagecolorthresh = partial(
         combined_seg,
         detect_object_hsv_colorthresh,
         partial(yolov8_classify, model_classifier_trashbox))
-
     detect_trashbox2stagegarbageclass = partial(
         combined_seg,
         detect_object_garbageclassseg,
         partial(yolov8_classify, model_classifier_trashbox)
     )
-
-
-    # evaldataset("./results/detect_object_hsvcolorthresh", dataset_cropped_object, detect_object_hsv_colorthresh)
-    # evaldataset("./results/detect_object_zerowaste", dataset_cropped_object, detect_object_zerowaste)
-    # evaldataset("./results/detect_object_garbageclassseg", dataset_cropped_object, detect_object_garbageclassseg)
-    # evaldataset("./results/detect_object_trashboxsegnormal", dataset_cropped_object, detect_object_trashboxsegnormal)
-    # evaldataset("./results/detect_object_trashboxsegtransformed", dataset_cropped_object, detect_object_trashboxsegtransformed)
-
-    # evaldataset("./results/segment_zerowaste", dataset_cropped_zerowaste, detect_zerowaste)
-    # evaldataset("./results/segment_garbageclassseg", dataset_cropped_garbageclassseg, detect_garbageclassseg)
-
-    # evaldataset("./results/segment_trashboxsegnormal", dataset_cropped_trashboxseg, detect_trashboxsegnormal)
-    # evaldataset("./results/segment_trashboxsegtransformed", dataset_cropped_trashboxseg, detect_trashboxsegtransformed)
-    evaldataset("./results/segment_trashbox2stagecolorthresh", dataset_cropped_trashboxseg, detect_trashbox2stagecolorthresh)
-
-
+    evaldataset("./results/segment_trashbox2stagecolorthresh",
+                dataset_cropped_trashboxseg,
+                detect_trashbox2stagecolorthresh)
     evaldataset("./results/segment_trashbox2stagegarbageclass", dataset_cropped_trashboxseg,
                  detect_trashbox2stagegarbageclass)
-
-
-
