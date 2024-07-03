@@ -8,6 +8,9 @@ import os
 from ultralytics import YOLO
 
 def main():
+    # define which segmentation
+    yolomodel = YOLO("../code/resources/garbageclassifcationsegaugyolov8n224.pt")
+    infer = partial(segment.yolov8_seg, yolomodel)
 
     # initialize robot
     settings = get_settings(is_simulation=False)
@@ -16,18 +19,8 @@ def main():
     robot.update_tool()
     robot.release_with_tool()
 
-
     conveyor_id = robot.set_conveyor()
-    #ConveyorID.ID_1
-
-    # define which segmentation
-    yolomodel = YOLO("../code/resources/garbageclassifcationsegaugyolov8n224.pt")
-    infer = partial(segment.yolov8_seg, yolomodel)
-
-    #robot_learn_poses(robot, yolomodel.names, settings)
-
-    robot_learn_poses(robot, ["paper", "glass", "plastic", "bio", "metal", "cardboard"], settings)#"metal", "medical", "e-waste", "cardboard", "trash", "bio", "background", "observation"], settings)
-    #robot_learn_poses(robot, ["observation"], settings)
+    robot_learn_poses(robot, ["paper", "glass", "plastic", "bio", "metal", "cardboard"], settings)
 
     speed = 0
     time_for_grap = 0.8
@@ -74,10 +67,9 @@ def main():
         # a little bit and we start all over
         if len(contours) == 0:
             print("no contours")
-            #robot.control_conveyor(conveyor_id, True, 20, ConveyorDirection.Forward)
-            #robot.control_conveyor(conveyor_id, False, 0, ConveyorDirection.Forward)
+            robot.control_conveyor(conveyor_id, True, 20, ConveyorDirection.Forward)
+            robot.control_conveyor(conveyor_id, False, 0, ConveyorDirection.Forward)
             continue
-
 
         # get the object
         # that we want to grab
@@ -133,11 +125,11 @@ def main():
             }
             robot.move_pose(PoseObject(**intermediate_pose))
             robot.place_from_pose(destination)
+
         except NiryoRobotException as e:
             print(e)
             robot.release_with_tool()
             continue
-
 
 def get_settings(is_simulation):
     """ depending on the simulation we are in we return different settings :) """
@@ -146,9 +138,10 @@ def get_settings(is_simulation):
         settings["ip"] = "127.0.0.1"
         settings["workspace_name"] = "gazebo_1"
     else:
-        settings["ip"] = "192.168.0.228"
+        settings["ip"] = "192.168.0.140"
         #settings["workspace_name"] = "t_workspace"
-        settings["workspace_name"] = "t_convbelt"
+        settings["workspace_name"] = "new_workspace"
+        #settings["workspace_name"] = "t_convbelt"
 
     settings["pose_filename"] = "./resources/poses.json"
 
@@ -184,9 +177,6 @@ def robot_learn_poses(robot, names, settings):
 def crop_image_border(image, xy_xoffset):
     xoffset, yoffset = xy_xoffset
     return image[yoffset:-yoffset, xoffset:-xoffset]
-
-
-
 
 if __name__ == '__main__':
     main()
