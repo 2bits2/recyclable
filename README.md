@@ -2,11 +2,9 @@
 ##  (AI-based detection and sorting of trash with the robot Niryo Ned2)
 
 This repository contains functionality to:
-
-- control a niryo ned 2 robot to sort objects (trash in this case)
-  
   ![output](https://github.com/2bits2/recyclable/assets/76791368/2e2ffca6-ed9f-4def-bc4b-eac034019bd7)
-
+  
+- control a niryo ned 2 robot to sort objects (trash in this case)
   
 - to combine yolov8 classification with segmentation models
   (to compare a 1-stage segmentation method with a simple 2-stage segmentation method)
