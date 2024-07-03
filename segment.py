@@ -4,6 +4,7 @@ from ultralytics import YOLO
 import time
 
 def standardize_image(img):
+    """ normalizes the image """
     array_type = img.dtype
 
     # color balance normalizing
@@ -27,7 +28,6 @@ def fill_holes(img):
     im_floodfill_inv = cv2.bitwise_not(im_floodfill)
     img = img | im_floodfill_inv
     return img
-
 
 def color_threshold_mask(img, color_hsv_min_max = [[0, 70, 0], [179, 255, 255]]):
     frame_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
@@ -53,6 +53,11 @@ def color_threshold_mask(img, color_hsv_min_max = [[0, 70, 0], [179, 255, 255]])
     return mask
 
 def extract_images_for_classification(image, contours):
+    """
+    given an array of opencv contours the corresponding
+    bounding rectangles are used to cut the given image
+    the return value is an array of extracted images
+    """
     images = []
     image_height, image_width = image.shape[:2]
     for contour in contours:
@@ -60,15 +65,13 @@ def extract_images_for_classification(image, contours):
         square_size = max(w, h)
         center_x = x + w / 2
         center_y = y + h / 2
-        #img_cut = np.zeros((square_size, square_size, 3), np.uint8)
-        img_cut = image[max(0, int(center_y - square_size / 2)): min(image_height, int(center_y + square_size / 2)),
-                              max(0, int(center_x - square_size / 2)): min(image_width, int(center_x + square_size / 2))]
+        img_cut = image[
+            max(0, int(center_y - square_size / 2)): min(image_height, int(center_y + square_size / 2)),
+            max(0, int(center_x - square_size / 2)): min(image_width, int(center_x + square_size / 2))]
         images.append(img_cut)
     return images
 
-
 import supervision as sv
-
 import time
 
 def color_seg2(image, color_hsv_min_max=[[0, 70, 0], [179, 255, 255]]):
@@ -76,7 +79,6 @@ def color_seg2(image, color_hsv_min_max=[[0, 70, 0], [179, 255, 255]]):
     mask = color_threshold_mask(image, color_hsv_min_max)
     contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     speed = time.time() - start
-
 
     if len(contours) == 0:
         detections = sv.Detections.empty()
@@ -90,7 +92,6 @@ def color_seg2(image, color_hsv_min_max=[[0, 70, 0], [179, 255, 255]]):
     for i in range(len(contours)):
         object_mask = np.zeros(image.shape[:2], dtype=np.uint8)
         cv2.drawContours(object_mask, contours, i, 255, -1)
-        #object_mask = object_mask.astype(bool)
         x1, y1, w, h = cv2.boundingRect(contours[i])
         x2 = x1 + w
         y2 = y1 + h
@@ -100,8 +101,6 @@ def color_seg2(image, color_hsv_min_max=[[0, 70, 0], [179, 255, 255]]):
         class_ids.append(0)
 
     xyxys = np.array(object_boxes_xyxy)
-    #print(xyxys)
-
     detections = sv.Detections(
         xyxy=xyxys,
         mask=np.array(object_masks),
@@ -112,10 +111,8 @@ def color_seg2(image, color_hsv_min_max=[[0, 70, 0], [179, 255, 255]]):
     detections.speed = speed
     return detections
 
-
 def yolov8_seg2(model, image):
     return supervision.Detections.from_ultralytics(model(image)[0])
-
 
 def color_seg(image, color_hsv_min_max = [[0, 70, 0], [179, 255, 255]], only_biggest_contour=False):
     total_start = time.time()
@@ -156,12 +153,6 @@ def color_seg(image, color_hsv_min_max = [[0, 70, 0], [179, 255, 255]], only_big
         "masks": object_masks,
         "time_total": total_elapsed
     }
-
-
-
-
-
-
 
 def yolov8_seg(model, image):
     total_start = time.time()
@@ -218,7 +209,6 @@ def yolov8_classify(model, images):
         "names": names
     }
 
-
 def combined_seg(segment, classify, extract_images_from_contours, image):
     time_start = time.time()
     segmentations = segment(image)
@@ -231,4 +221,3 @@ def combined_seg(segment, classify, extract_images_from_contours, image):
     segmentations["labels"] = classifications["labels"]
     segmentations["names"] = classifications["names"]
     return segmentations
-
